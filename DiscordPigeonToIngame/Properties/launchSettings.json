@@ -1,0 +1,22 @@
+{
+  "profiles": {
+    "Client": {
+      "commandName": "Executable",
+      "executablePath": "dotnet",
+      "commandLineArgs": "\"$(VINTAGE_STORY)/Vintagestory.dll\" --tracelog --dataPath \"$(VINTAGE_STORY_DATA)\" --addModPath \"$(ProjectDir)/bin/$(Configuration)/Mods\" --openWorld TestWorld",
+      "workingDirectory": "$(VINTAGE_STORY)"
+    },
+    "Server": {
+      "commandName": "Executable",
+      "executablePath": "dotnet",
+      "commandLineArgs": "\"$(VINTAGE_STORY)/VintagestoryServer.dll\" --tracelog --addModPath \"$(ProjectDir)/bin/$(Configuration)/Mods\" --dataPath \"$(VINTAGE_STORY_DATA)\"",
+      "workingDirectory": "$(VINTAGE_STORY)"
+    },
+    "Upload Release (Build)": {
+      "commandName": "Executable",
+      "executablePath": "powershell",
+      "commandLineArgs": "-Command \"$changelog = Read-Host 'Changelog'; .\\build.ps1; $zip = Get-ChildItem .\\Releases\\*.zip | Sort-Object LastWriteTime | Select-Object -Last 1; vsmoduploader $zip.FullName --changelog $changelog\"",
+      "workingDirectory": "$(ProjectDir)/.."
+    }
+  }
+}

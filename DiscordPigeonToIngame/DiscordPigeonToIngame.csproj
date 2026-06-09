@@ -1,0 +1,105 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <VINTAGE_STORY>C:\Users\siimr\AppData\Roaming\VSLGameVersions\1.21.5</VINTAGE_STORY>
+        <VINTAGE_STORY_DATA>C:\Users\siimr\AppData\Roaming\VSLInstallations\1.21.5</VINTAGE_STORY_DATA>
+        <TargetFramework>net8.0</TargetFramework>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <OutputPath>bin\$(Configuration)\Mods\mod</OutputPath>
+        <Nullable>enable</Nullable>
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Reference Include="VintagestoryAPI">
+            <HintPath>$(VINTAGE_STORY)/VintagestoryAPI.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="VSSurvivalMod">
+            <HintPath>$(VINTAGE_STORY)/Mods/VSSurvivalMod.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="VSEssentials">
+            <HintPath>$(VINTAGE_STORY)/Mods/VSEssentials.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="VSCreativeMod">
+            <HintPath>$(VINTAGE_STORY)/Mods/VSCreativeMod.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="Newtonsoft.Json">
+            <HintPath>$(VINTAGE_STORY)/Lib/Newtonsoft.Json.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="0Harmony">
+            <HintPath>$(VINTAGE_STORY)/Lib/0Harmony.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="VintagestoryLib">
+            <HintPath>$(VINTAGE_STORY)/VintagestoryLib.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="protobuf-net">
+            <HintPath>$(VINTAGE_STORY)/Lib/protobuf-net.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="Microsoft.Data.Sqlite">
+            <HintPath>$(VINTAGE_STORY)/Lib/Microsoft.Data.Sqlite.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Discord.Net" Version="3.19.1" />
+        <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.26">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="assets\**">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="modinfo.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="modicon.png" Condition="Exists('modicon.png')">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
+
+    <Target Name="MergeDiscordDependencies" AfterTargets="Build">
+        <PropertyGroup>
+            <_RepackDir>$(MSBuildProjectDirectory)\bin\$(Configuration)\Mods\mod\</_RepackDir>
+        </PropertyGroup>
+        <ItemGroup>
+            <ILRepackInputs Include="$(_RepackDir)DiscordPigeonToIngame.dll" />
+            <ILRepackInputs Include="$(_RepackDir)Discord.Net.*.dll" />
+            <ILRepackInputs Include="$(_RepackDir)Microsoft.Extensions.DependencyInjection.Abstractions.dll" />
+        </ItemGroup>
+        <ILRepack
+            Parallel="true"
+            Internalize="true"
+            InputAssemblies="@(ILRepackInputs)"
+            LibraryPath="$(_RepackDir);$(VINTAGE_STORY)\Lib;$(VINTAGE_STORY)\Mods"
+            TargetKind="Dll"
+            OutputFile="$(_RepackDir)DiscordPigeonToIngame.dll"
+        />
+        <ItemGroup>
+            <FilesToClean Include="$(_RepackDir)Discord.Net.*.dll" />
+            <FilesToClean Include="$(_RepackDir)Microsoft.Extensions.DependencyInjection.Abstractions.dll" />
+            <FilesToClean Include="$(_RepackDir)System.Linq.AsyncEnumerable.dll" />
+            <FilesToClean Include="$(_RepackDir)Newtonsoft.Json.dll" />
+        </ItemGroup>
+        <Delete Files="@(FilesToClean)" />
+    </Target>
+
+</Project>

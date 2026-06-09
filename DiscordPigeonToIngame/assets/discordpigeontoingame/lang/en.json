@@ -1,0 +1,7 @@
+{
+    "discordpigeontoingame:pigeon-blocked-sky": "You feel like a pigeon is trying to find you, but cannot see you from the sky. Go outside and run <a href=\"command://.discordpigeon receive\">/discordpigeon receive</a>.",
+    "discordpigeontoingame:pigeon-delivered-one": "A pigeon has arrived for you! You received 1 message: {0}",
+    "discordpigeontoingame:pigeon-delivered-many": "A pigeon has arrived for you! You received {0} messages: {1}",
+    "discordpigeontoingame:pigeon-inventory-full-one": "You have 1 pigeon waiting but no inventory space. Free up slots and run <a href=\"command://.discordpigeon receive\">/discordpigeon receive</a>.",
+    "discordpigeontoingame:pigeon-inventory-full-many": "You have {0} pigeons waiting but no inventory space. Free up slots and run <a href=\"command://.discordpigeon receive\">/discordpigeon receive</a>."
+}
