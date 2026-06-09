@@ -22,7 +22,7 @@ public class PigeonDatabase
     private void InitSchema()
     {
         using var connection = Open();
-        using var cmd = new SqliteCommand("""
+        using (var cmd = new SqliteCommand("""
             CREATE TABLE IF NOT EXISTS Pigeons (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 RecipientUid TEXT NOT NULL,
@@ -30,25 +30,65 @@ public class PigeonDatabase
                 Title TEXT NOT NULL,
                 Message TEXT NOT NULL,
                 SentAt INTEGER NOT NULL DEFAULT (strftime('%s','now')),
-                Delivered INTEGER NOT NULL DEFAULT 0
+                Delivered INTEGER NOT NULL DEFAULT 0,
+                DmFallbackSent INTEGER NOT NULL DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS idx_recipient ON Pigeons(RecipientUid);
             CREATE INDEX IF NOT EXISTS idx_sender ON Pigeons(SenderUid);
-            """, connection);
-        cmd.ExecuteNonQuery();
+            """, connection))
+            cmd.ExecuteNonQuery();
+
+        if (EnsureColumn(connection, "DmFallbackSent", "INTEGER NOT NULL DEFAULT 0"))
+        {
+            using var backfill = new SqliteCommand("UPDATE Pigeons SET DmFallbackSent = 1", connection);
+            backfill.ExecuteNonQuery();
+        }
     }
 
-    public void Add(string recipientUid, string senderUid, string title, string message)
+    private static bool EnsureColumn(SqliteConnection connection, string name, string definition)
+    {
+        using var check = new SqliteCommand("SELECT COUNT(*) FROM pragma_table_info('Pigeons') WHERE name = @n", connection);
+        check.Parameters.AddWithValue("@n", name);
+        if (check.ExecuteScalar() is long count && count > 0) return false;
+        using var alter = new SqliteCommand($"ALTER TABLE Pigeons ADD COLUMN {name} {definition}", connection);
+        alter.ExecuteNonQuery();
+        return true;
+    }
+
+    public long Add(string recipientUid, string senderUid, string title, string message)
     {
         using var connection = Open();
         using var cmd = new SqliteCommand(
-            "INSERT INTO Pigeons (RecipientUid, SenderUid, Title, Message) VALUES (@r, @s, @t, @m)",
+            "INSERT INTO Pigeons (RecipientUid, SenderUid, Title, Message) VALUES (@r, @s, @t, @m); SELECT last_insert_rowid();",
             connection);
         cmd.Parameters.AddWithValue("@r", recipientUid);
         cmd.Parameters.AddWithValue("@s", senderUid);
         cmd.Parameters.AddWithValue("@t", title);
         cmd.Parameters.AddWithValue("@m", message);
-        cmd.ExecuteNonQuery();
+        return (long)cmd.ExecuteScalar();
+    }
+
+    public bool TryMarkDmFallbackSent(long id)
+    {
+        using var connection = Open();
+        using var cmd = new SqliteCommand(
+            "UPDATE Pigeons SET DmFallbackSent = 1 WHERE Id = @id AND Delivered = 0 AND DmFallbackSent = 0",
+            connection);
+        cmd.Parameters.AddWithValue("@id", id);
+        return cmd.ExecuteNonQuery() > 0;
+    }
+
+    public List<(long Id, string RecipientUid, string Title, string Message, long SentAt)> GetDmFallbackPending()
+    {
+        using var connection = Open();
+        using var cmd = new SqliteCommand(
+            "SELECT Id, RecipientUid, Title, Message, SentAt FROM Pigeons WHERE Delivered = 0 AND DmFallbackSent = 0",
+            connection);
+        using var reader = cmd.ExecuteReader();
+        var results = new List<(long, string, string, string, long)>();
+        while (reader.Read())
+            results.Add(((long)reader["Id"], (string)reader["RecipientUid"], (string)reader["Title"], (string)reader["Message"], (long)reader["SentAt"]));
+        return results;
     }
 
     public List<(long Id, string SenderUid, string Title, string Message)> GetPending(string recipientUid, int delaySeconds)

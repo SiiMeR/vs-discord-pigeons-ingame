@@ -61,9 +61,9 @@ public class PigeonDeliveryService
         return remaining > TimeSpan.Zero ? remaining : null;
     }
 
-    public void SendPigeon(string senderUid, string recipientUid, string title, string message, Action? onEnRoute = null)
+    public void SendPigeon(string senderUid, string recipientUid, string title, string message, Action? onEnRoute = null, Action? onDmFallback = null)
     {
-        _db.Add(recipientUid, senderUid, title, message);
+        var id = _db.Add(recipientUid, senderUid, title, message);
 
         _api.Event.RegisterCallback(_ =>
         {
@@ -75,6 +75,43 @@ public class PigeonDeliveryService
             else
                 onEnRoute?.Invoke();
         }, _config.DeliveryDelayMinutes * 60 * 1000);
+
+        if (onDmFallback == null || !_config.DmFallbackEnabled) return;
+        ScheduleDmFallback(id, _config.DmFallbackDelayMinutes * 60 * 1000, onDmFallback);
+    }
+
+    private void ScheduleDmFallback(long id, int delayMs, Action onDmFallback)
+    {
+        _api.Event.RegisterCallback(_ =>
+        {
+            if (_db.TryMarkDmFallbackSent(id))
+                onDmFallback.Invoke();
+        }, delayMs);
+    }
+
+    public void RecoverDmFallbacks(Action<string, string, string> dmFallback)
+    {
+        if (!_config.DmFallbackEnabled) return;
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var delaySeconds = (long)_config.DmFallbackDelayMinutes * 60;
+
+        foreach (var pigeon in _db.GetDmFallbackPending())
+        {
+            var discordId = _config.PlayerMappings.FirstOrDefault(kv => kv.Value == pigeon.RecipientUid).Key;
+            if (string.IsNullOrEmpty(discordId)) continue;
+
+            var remaining = pigeon.SentAt + delaySeconds - now;
+            if (remaining <= 0)
+            {
+                if (_db.TryMarkDmFallbackSent(pigeon.Id))
+                    dmFallback(discordId, pigeon.Title, pigeon.Message);
+                continue;
+            }
+
+            var delayMs = (int)Math.Min(remaining * 1000L, int.MaxValue);
+            ScheduleDmFallback(pigeon.Id, delayMs, () => dmFallback(discordId, pigeon.Title, pigeon.Message));
+        }
     }
 
     public void AttemptDelivery(IServerPlayer player)

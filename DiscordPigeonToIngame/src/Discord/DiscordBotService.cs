@@ -14,6 +14,7 @@ public class DiscordBotService
     private readonly PigeonDeliveryService _delivery;
     private readonly ILogger _vsLogger;
     private DiscordSocketClient? _client;
+    private bool _recovered;
 
     public DiscordBotService(ModConfig config, PigeonDeliveryService delivery, ILogger vsLogger)
     {
@@ -52,6 +53,12 @@ public class DiscordBotService
 
     private async Task OnReady()
     {
+        if (!_recovered)
+        {
+            _recovered = true;
+            _delivery.RecoverDmFallbacks((discordId, title, message) => _ = DmPigeonContentAsync(discordId, title, message));
+        }
+
         try
         {
             var guild = _client!.GetGuild(_config.GuildId);
@@ -131,9 +138,17 @@ public class DiscordBotService
             if (subCmd?.Name != "send") return;
 
             var senderId = command.User.Id.ToString();
-            if (!_config.PlayerMappings.ContainsKey(senderId))
+            if (!_config.PlayerMappings.TryGetValue(senderId, out var senderUid))
             {
                 await command.RespondAsync("Your Discord account is not linked to a VS player. Run /pigeon link <your vs username> to link your VS username.", ephemeral: true);
+                return;
+            }
+
+            var cooldownMinutes = ResolveCooldownMinutes(command.User);
+            var remaining = _delivery.GetCooldownRemaining(senderUid, cooldownMinutes);
+            if (remaining.HasValue)
+            {
+                await command.RespondAsync($"You can only send a pigeon once every {cooldownMinutes} minutes! Try again in {(int)remaining.Value.TotalMinutes}m {remaining.Value.Seconds}s.", ephemeral: true);
                 return;
             }
 
@@ -379,7 +394,9 @@ public class DiscordBotService
                 return;
             }
 
-            _delivery.SendPigeon(senderUid, recipientUid, title, message, () => _ = NotifyRecipientAsync(recipientId));
+            _delivery.SendPigeon(senderUid, recipientUid, title, message,
+                () => _ = NotifyRecipientAsync(recipientId),
+                () => _ = DmPigeonContentAsync(recipientId, title, message));
             await modal.RespondAsync($"Pigeon sent to {MentionUtils.MentionUser(ulong.Parse(recipientId))}!", ephemeral: true);
 
             await SendAuditEmbed(title, message, modal.User.Mention, MentionUtils.MentionUser(ulong.Parse(recipientId)));
@@ -436,7 +453,10 @@ public class DiscordBotService
             Action? onEnRoute = !string.IsNullOrEmpty(recipientDiscordId)
                 ? () => _ = NotifyRecipientAsync(recipientDiscordId)
                 : null;
-            _delivery.SendPigeon(senderUid, uid!, title, message, onEnRoute);
+            Action? onDmFallback = !string.IsNullOrEmpty(recipientDiscordId)
+                ? () => _ = DmPigeonContentAsync(recipientDiscordId, title, message)
+                : null;
+            _delivery.SendPigeon(senderUid, uid!, title, message, onEnRoute, onDmFallback);
             await modal.FollowupAsync($"Pigeon sent to **{vsUsername}**!", ephemeral: true);
 
             await SendAuditEmbed(title, message, modal.User.Mention, vsUsername);
@@ -470,6 +490,28 @@ public class DiscordBotService
         catch (Exception ex)
         {
             _vsLogger.Error($"Failed to DM {discordId}: {ex.Message}");
+        }
+    }
+
+    private async Task DmPigeonContentAsync(string discordId, string title, string message)
+    {
+        if (_client == null || !ulong.TryParse(discordId, out var userId)) return;
+        try
+        {
+            var user = await _client.GetUserAsync(userId);
+            if (user == null) return;
+            var dm = await user.CreateDMChannelAsync();
+            var embed = new EmbedBuilder()
+                .WithTitle(title)
+                .WithDescription(message)
+                .WithColor(Color.Gold)
+                .WithFooter("This is a late delivery for a pigeon you weren't around to receive for an extended time. You can still receive it ingame once you log on.")
+                .Build();
+            await dm.SendMessageAsync(embed: embed);
+        }
+        catch (Exception ex)
+        {
+            _vsLogger.Error($"Failed to DM pigeon content to {discordId}: {ex.Message}");
         }
     }
 

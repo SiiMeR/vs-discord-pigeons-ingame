@@ -10,6 +10,8 @@ public class ModConfig
     public ulong LinkRoleId { get; set; } = 0;
     public ulong ModerationRoleId { get; set; } = 0;
     public int DeliveryDelayMinutes { get; set; } = 5;
+    public bool DmFallbackEnabled { get; set; } = false;
+    public int DmFallbackDelayMinutes { get; set; } = 240;
     public int PigeonCooldownMinutes { get; set; } = 30;
     public int PigeonMessageCharacterLimit { get; set; } = 500;
     public bool CanPigeonSelf { get; set; } = false;
